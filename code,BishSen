@@ -1,0 +1,374 @@
+# ============================================================================
+# BishSen ML Project - Customer Churn Prediction
+# Complete Deployable Machine Learning System
+# Author: Bish Sen
+# ============================================================================
+#lets go an build this website from scratch
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.svm import SVC
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, 
+                             f1_score, roc_auc_score, confusion_matrix, 
+                             classification_report, roc_curve)
+import joblib
+import warnings
+warnings.filterwarnings('ignore')
+
+# ============================================================================
+# STEP 1: DATA GENERATION (Since we don't have real data)
+# ============================================================================
+
+def generate_sample_data(n_samples=5000):
+    """Generate synthetic customer churn data"""
+    print("=" * 80)
+    print("STEP 1: GENERATING SYNTHETIC CUSTOMER DATA")
+    print("=" * 80)
+    
+    np.random.seed(42)
+    
+    # Customer features
+    data = {
+        'customer_id': range(1, n_samples + 1),
+        'age': np.random.randint(18, 70, n_samples),
+        'gender': np.random.choice(['Male', 'Female'], n_samples),
+        'tenure_months': np.random.randint(1, 72, n_samples),
+        'monthly_charges': np.random.uniform(20, 150, n_samples),
+        'total_charges': np.random.uniform(100, 8000, n_samples),
+        'contract_type': np.random.choice(['Month-to-month', 'One year', 'Two year'], 
+                                         n_samples, p=[0.5, 0.3, 0.2]),
+        'payment_method': np.random.choice(['Electronic check', 'Mailed check', 
+                                           'Bank transfer', 'Credit card'], n_samples),
+        'internet_service': np.random.choice(['DSL', 'Fiber optic', 'No'], 
+                                            n_samples, p=[0.4, 0.4, 0.2]),
+        'online_security': np.random.choice(['Yes', 'No'], n_samples),
+        'tech_support': np.random.choice(['Yes', 'No'], n_samples),
+        'num_services': np.random.randint(0, 8, n_samples),
+        'customer_service_calls': np.random.randint(0, 10, n_samples)
+    }
+    
+    df = pd.DataFrame(data)
+    
+    # Generate churn based on features (with some logic)
+    churn_prob = (
+        0.1 +  # base churn rate
+        (df['contract_type'] == 'Month-to-month') * 0.3 +
+        (df['tenure_months'] < 12) * 0.25 +
+        (df['customer_service_calls'] > 5) * 0.2 +
+        (df['monthly_charges'] > 100) * 0.15 +
+        (df['tech_support'] == 'No') * 0.1
+    )
+    
+    df['churn'] = (np.random.random(n_samples) < churn_prob).astype(int)
+    
+    print(f"✓ Generated {n_samples} customer records")
+    print(f"✓ Churn Rate: {df['churn'].mean()*100:.2f}%")
+    print(f"✓ Features: {len(df.columns)}")
+    
+    return df
+
+# ============================================================================
+# STEP 2: DATA PREPROCESSING
+# ============================================================================
+
+class DataPreprocessor:
+    def __init__(self):
+        self.scaler = StandardScaler()
+        self.label_encoders = {}
+        
+    def preprocess(self, df):
+        """Complete preprocessing pipeline"""
+        print("\n" + "=" * 80)
+        print("STEP 2: DATA PREPROCESSING")
+        print("=" * 80)
+        
+        # Drop customer_id
+        df = df.drop('customer_id', axis=1)
+        
+        # Handle missing values
+        print("✓ Checking missing values...")
+        print(f"  Missing values: {df.isnull().sum().sum()}")
+        
+        # Encode categorical features
+        print("✓ Encoding categorical features...")
+        categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+        categorical_cols.remove('churn') if 'churn' in categorical_cols else None
+        
+        for col in categorical_cols:
+            le = LabelEncoder()
+            df[col] = le.fit_transform(df[col])
+            self.label_encoders[col] = le
+        
+        print(f"  Encoded {len(categorical_cols)} categorical features")
+        
+        # Feature engineering
+        print("✓ Creating new features...")
+        df['charges_per_month'] = df['total_charges'] / (df['tenure_months'] + 1)
+        df['avg_monthly_spending'] = df['monthly_charges'] * df['tenure_months'] / 12
+        df['is_new_customer'] = (df['tenure_months'] <= 6).astype(int)
+        
+        return df
+
+# ============================================================================
+# STEP 3: EXPLORATORY DATA ANALYSIS
+# ============================================================================
+
+def perform_eda(df):
+    """Perform exploratory data analysis"""
+    print("\n" + "=" * 80)
+    print("STEP 3: EXPLORATORY DATA ANALYSIS")
+    print("=" * 80)
+    
+    print("\n📊 Dataset Statistics:")
+    print(f"  Total Records: {len(df)}")
+    print(f"  Total Features: {len(df.columns)}")
+    print(f"  Churned Customers: {df['churn'].sum()} ({df['churn'].mean()*100:.2f}%)")
+    print(f"  Retained Customers: {len(df) - df['churn'].sum()} ({(1-df['churn'].mean())*100:.2f}%)")
+    
+    print("\n📈 Feature Correlations with Churn:")
+    correlations = df.corr()['churn'].sort_values(ascending=False)
+    print(correlations.head(10).to_string())
+    
+    return correlations
+
+# ============================================================================
+# STEP 4: MODEL TRAINING
+# ============================================================================
+
+class ModelTrainer:
+    def __init__(self):
+        self.models = {}
+        self.results = {}
+        self.best_model = None
+        
+    def train_models(self, X_train, X_test, y_train, y_test):
+        """Train multiple ML models"""
+        print("\n" + "=" * 80)
+        print("STEP 4: MODEL TRAINING & EVALUATION")
+        print("=" * 80)
+        
+        # Initialize models
+        self.models = {
+            'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000),
+            'Random Forest': RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1),
+            'Gradient Boosting': GradientBoostingClassifier(n_estimators=100, random_state=42),
+            'SVM': SVC(kernel='rbf', probability=True, random_state=42)
+        }
+        
+        print(f"\n🤖 Training {len(self.models)} ML Models...\n")
+        
+        for name, model in self.models.items():
+            print(f"{'=' * 80}")
+            print(f"Training: {name}")
+            print(f"{'=' * 80}")
+            
+            # Train
+            model.fit(X_train, y_train)
+            
+            # Predict
+            y_pred = model.predict(X_test)
+            y_pred_proba = model.predict_proba(X_test)[:, 1]
+            
+            # Evaluate
+            accuracy = accuracy_score(y_test, y_pred)
+            precision = precision_score(y_test, y_pred)
+            recall = recall_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred)
+            roc_auc = roc_auc_score(y_test, y_pred_proba)
+            
+            # Cross-validation
+            cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
+            
+            # Store results
+            self.results[name] = {
+                'Accuracy': accuracy,
+                'Precision': precision,
+                'Recall': recall,
+                'F1-Score': f1,
+                'ROC-AUC': roc_auc,
+                'CV Mean': cv_scores.mean(),
+                'CV Std': cv_scores.std()
+            }
+            
+            print(f"  Accuracy:  {accuracy:.4f}")
+            print(f"  Precision: {precision:.4f}")
+            print(f"  Recall:    {recall:.4f}")
+            print(f"  F1-Score:  {f1:.4f}")
+            print(f"  ROC-AUC:   {roc_auc:.4f}")
+            print(f"  CV Score:  {cv_scores.mean():.4f} (±{cv_scores.std():.4f})")
+            print()
+        
+        return self.results
+    
+    def compare_models(self):
+        """Compare all trained models"""
+        print("\n" + "=" * 80)
+        print("STEP 5: MODEL COMPARISON")
+        print("=" * 80)
+        
+        results_df = pd.DataFrame(self.results).T
+        results_df = results_df.sort_values('F1-Score', ascending=False)
+        
+        print("\n📊 Model Performance Comparison:\n")
+        print(results_df.to_string())
+        
+        best_model_name = results_df.index[0]
+        self.best_model = self.models[best_model_name]
+        
+        print(f"\n🏆 BEST MODEL: {best_model_name}")
+        print(f"   F1-Score: {results_df.loc[best_model_name, 'F1-Score']:.4f}")
+        print(f"   Accuracy: {results_df.loc[best_model_name, 'Accuracy']:.4f}")
+        print(f"   ROC-AUC:  {results_df.loc[best_model_name, 'ROC-AUC']:.4f}")
+        
+        return best_model_name, self.best_model, results_df
+    
+    def detailed_evaluation(self, X_test, y_test, model_name):
+        """Detailed evaluation of best model"""
+        print("\n" + "=" * 80)
+        print(f"STEP 6: DETAILED EVALUATION - {model_name}")
+        print("=" * 80)
+        
+        y_pred = self.best_model.predict(X_test)
+        
+        print("\n📋 Classification Report:\n")
+        print(classification_report(y_test, y_pred, 
+                                   target_names=['Not Churned', 'Churned']))
+        
+        print("\n📊 Confusion Matrix:\n")
+        cm = confusion_matrix(y_test, y_pred)
+        print(f"                Predicted")
+        print(f"              Not Churn  Churn")
+        print(f"Actual Not     {cm[0][0]:6d}    {cm[0][1]:5d}")
+        print(f"       Churn   {cm[1][0]:6d}    {cm[1][1]:5d}")
+
+# ============================================================================
+# STEP 7: MODEL DEPLOYMENT
+# ============================================================================
+
+def save_model(model, scaler, filename='bishsen_churn_model.pkl'):
+    """Save trained model for deployment"""
+    print("\n" + "=" * 80)
+    print("STEP 7: MODEL DEPLOYMENT")
+    print("=" * 80)
+    
+    model_package = {
+        'model': model,
+        'scaler': scaler,
+        'version': '1.0',
+        'author': 'Bish Sen'
+    }
+    
+    joblib.dump(model_package, filename)
+    print(f"✓ Model saved as: {filename}")
+    print(f"✓ Model ready for deployment!")
+    
+    return filename
+
+def load_and_predict(filename, new_data):
+    """Load model and make predictions"""
+    model_package = joblib.load(filename)
+    model = model_package['model']
+    scaler = model_package['scaler']
+    
+    # Scale and predict
+    new_data_scaled = scaler.transform(new_data)
+    prediction = model.predict(new_data_scaled)
+    probability = model.predict_proba(new_data_scaled)
+    
+    return prediction, probability
+
+# ============================================================================
+# MAIN EXECUTION
+# ============================================================================
+
+def main():
+    """Main execution pipeline"""
+    print("\n" + "=" * 80)
+    print("🚀 BishSen ML Project - Customer Churn Prediction")
+    print("   Complete Machine Learning Pipeline")
+    print("   Author: Bish Sen")
+    print("=" * 80)
+    
+    # Step 1: Generate Data
+    df = generate_sample_data(5000)
+    
+    # Step 2: Preprocess Data
+    preprocessor = DataPreprocessor()
+    df_processed = preprocessor.preprocess(df.copy())
+    
+    # Step 3: EDA
+    correlations = perform_eda(df_processed)
+    
+    # Step 4: Split Data
+    print("\n" + "=" * 80)
+    print("DATA SPLITTING")
+    print("=" * 80)
+    
+    X = df_processed.drop('churn', axis=1)
+    y = df_processed['churn']
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    print(f"✓ Training Set: {X_train.shape[0]} samples")
+    print(f"✓ Test Set: {X_test.shape[0]} samples")
+    print(f"✓ Features: {X_train.shape[1]}")
+    
+    # Step 5: Train Models
+    trainer = ModelTrainer()
+    results = trainer.train_models(X_train_scaled, X_test_scaled, y_train, y_test)
+    
+    # Step 6: Compare Models
+    best_name, best_model, results_df = trainer.compare_models()
+    
+    # Step 7: Detailed Evaluation
+    trainer.detailed_evaluation(X_test_scaled, y_test, best_name)
+    
+    # Step 8: Save Model
+    model_file = save_model(best_model, scaler)
+    
+    # Step 9: Demo Prediction
+    print("\n" + "=" * 80)
+    print("STEP 8: DEMO PREDICTION")
+    print("=" * 80)
+    
+    sample_customer = X_test.iloc[0:1]
+    sample_customer_scaled = scaler.transform(sample_customer)
+    
+    prediction, probability = load_and_predict(model_file, sample_customer_scaled)
+    
+    print("\n🔮 Sample Customer Prediction:")
+    print(f"  Features: {sample_customer.values[0][:5]}...")
+    print(f"  Prediction: {'WILL CHURN' if prediction[0] == 1 else 'WILL NOT CHURN'}")
+    print(f"  Churn Probability: {probability[0][1]*100:.2f}%")
+    print(f"  Retention Probability: {probability[0][0]*100:.2f}%")
+    
+    # Final Summary
+    print("\n" + "=" * 80)
+    print("✅ PROJECT COMPLETE - SUMMARY")
+    print("=" * 80)
+    print(f"✓ Dataset: 5000 customers")
+    print(f"✓ Features: {X_train.shape[1]}")
+    print(f"✓ Models Trained: 4")
+    print(f"✓ Best Model: {best_name}")
+    print(f"✓ Best F1-Score: {results_df.loc[best_name, 'F1-Score']:.4f}")
+    print(f"✓ Model Saved: {model_file}")
+    print(f"✓ Status: READY FOR DEPLOYMENT")
+    print("=" * 80)
+    print("\n🎯 Project by: Bish Sen")
+    print("📧 Use this for placements and interviews!")
+    print("=" * 80)
+
+if __name__ == "__main__":
+    main()
