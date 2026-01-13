@@ -101,31 +101,6 @@ print(response.json())
 - **F1-Score**: ~0.85
 - **ROC-AUC**: ~0.88
 
-## 🎓 For Placement Interviews
-
-### Talk About:
-
-1. **Problem Understanding**
-   - Business impact of customer churn
-   - Cost of acquiring new vs retaining existing customers
-
-2. **Technical Approach**
-   - Data preprocessing and feature engineering
-   - Multiple algorithm comparison
-   - Cross-validation and hyperparameter tuning
-   - Model evaluation metrics
-
-3. **Deployment**
-   - RESTful API design
-   - Docker containerization
-   - Scalability considerations
-   - Production monitoring
-
-4. **Future Enhancements**
-   - Real-time prediction pipeline
-   - A/B testing framework
-   - Model retraining automation
-   - Dashboard for insights
 
 ## 🚀 Cloud Deployment Options
 
@@ -147,10 +122,10 @@ gcloud run deploy bishsen-ml --source .
 
 ## 📞 Contact
 
-**Bish Sen**  
+**Bishal   Mondal**  
 ML Engineer | Data Scientist
 contact no:9930858795
-gmail:bishalmondal804@gmail.com
+gmail:bishalmonda804@gmail.com
 linkedln:www.linkedin.com/in/bishal-biplab-mondal-1b90b8399
 ---
 
@@ -158,6 +133,4 @@ linkedln:www.linkedin.com/in/bishal-biplab-mondal-1b90b8399
 
 This project is created for educational and placement purposes.
 
----
-
-**⭐ Star this project if you find it helpful!**
+--
